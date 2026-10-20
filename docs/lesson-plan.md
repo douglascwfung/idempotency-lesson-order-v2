@@ -119,3 +119,49 @@ The controller unit tests from Lesson 1 continue to pass:
 mvn -Dtest=OrderControllerTest test
 ```
 
+## Lesson 3: Optimistic Locking with @Version
+
+Two concurrent updates of the same Order must not both succeed. The `@Version` column on the Order entity detects the conflict. The second update throws an exception when it tries to commit a stale version.
+
+### Learning Objectives
+
+- Add a version column to the Order entity with the `@Version` annotation.
+- Observe that Hibernate increments the version on each successful update.
+- Confirm that a second concurrent update of a stale entity throws `OptimisticLockingFailureException`.
+
+### Key Concepts
+
+The `@Version` annotation marks the field that Hibernate uses for optimistic locking. On each successful update the version value increases. When an entity is loaded, its version is recorded. If another transaction updates the same row and increments the version, the second transaction's update fails the version check and throws an exception. The exception is `OptimisticLockingFailureException` (or a subclass). No pessimistic lock is taken.
+
+### What You Will Build
+
+- A `version` field on the `Order` entity annotated with `@Version`.
+- A Flyway migration `V2__add_order_version.sql` that adds the column.
+- A Spring Boot test (`OrderOptimisticLockTest`) that loads the same Order twice, detaches the second instance, updates the first copy, and asserts that saving the second copy throws `OptimisticLockingFailureException`.
+
+### Deliberate Design Decisions
+
+Optimistic locking is chosen over pessimistic locking. The expected contention is low. A version conflict is reported to the caller rather than blocked. The version column is added only to the Order root. OrderDetail lines do not carry their own version yet (Lesson 4). No idempotency key is introduced yet.
+
+### Implementation Outline
+
+1. Add the `version` field to `Order` and annotate it with `@Version`.
+2. Add the Flyway migration that creates the column with a default of 0.
+3. Add `OrderOptimisticLockTest` that loads the Order twice, detaches the second instance so it carries the old version, updates the first, and asserts that saving the second throws `OptimisticLockingFailureException`.
+
+### Verify Your Work
+
+Run the optimistic-lock test:
+
+```
+mvn -Dtest=OrderOptimisticLockTest test
+```
+
+The method `concurrentReplaceThrowsOptimisticLockingFailure` must pass.
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderServiceTransactionTest,OrderControllerTest test
+```
+

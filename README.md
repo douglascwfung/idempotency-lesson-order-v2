@@ -59,8 +59,9 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 |--------|--------|
 | 1 | Order aggregate + REST create/get/replace (duplicates allowed) |
 | 2 | `@Transactional` service boundary |
+| 3 | Optimistic locking with `@Version` on Order |
 
-Tag `lesson-2` is the tip of this lesson.
+Tag `lesson-3` is the tip of this lesson.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
@@ -72,8 +73,9 @@ Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 | `lesson-0` | Empty starting point (scaffold) |
 | `lesson-1` | End state after Lesson 1 |
 | `lesson-2` | End state after Lesson 2 |
+| `lesson-3` | End state after Lesson 3 |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-2        # end of Lesson 2
+git checkout lesson-3        # end of Lesson 3
 ```
