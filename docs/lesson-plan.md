@@ -274,3 +274,53 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest,OrderControllerTest test
 ```
 
+## Lesson 6: User Id in the Hash and Key Reuse Rejection
+
+The hash must include the user id. A key that belongs to one user and one body must not be accepted for a different body. The same key with different content throws `IdempotencyKeyReuseException`, which maps to 409.
+
+### Learning Objectives
+
+- Include the user id in the request hash.
+- Reject a key that is reused with different content.
+- Keep the in-progress 409 behaviour unchanged.
+
+### Key Concepts
+
+The hash is now `userId + path + rawBody`. Two requests that share a key but differ in user or body produce different hashes. When a completed or in-progress key is found and the computed hash does not match the stored hash, `IdempotencyKeyReuseException` is thrown. The exception maps to HTTP 409. The front end is expected to send one request at a time; the server check is a backstop.
+
+### What You Will Build
+
+- Updated `IdempotencyService.claimOrReplay` that accepts a user id and includes it in the hash.
+- `IdempotencyKeyReuseException`.
+- Updated controller call that supplies a user id.
+- A unit test that verifies the reuse rejection.
+
+### Deliberate Design Decisions
+
+The user id is part of the hash so that one key cannot be used for two different users or two different bodies. For this lesson the user id is a fixed value. A later lesson can replace it with the authenticated principal. The 409 for an in-progress request still returns the running key.
+
+### Implementation Outline
+
+1. Change the hash method to include the user id.
+2. Change `claimOrReplay` to accept the user id and to throw `IdempotencyKeyReuseException` on hash mismatch.
+3. Update the controller to pass a user id.
+4. Update existing tests and add `createWithSameKeyAndDifferentContentThrows`.
+
+### Verify Your Work
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest test
+```
+
+The following methods must pass (names on `main` after Lessons 11–12):
+
+- `createWithNewKeyRunOrReplayCompletes`
+- `createWithCompletedKeyReplaysStoredResponse`
+- `createWithSameKeyAndDifferentContentThrows`
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest,OrderControllerTest test
+```
+

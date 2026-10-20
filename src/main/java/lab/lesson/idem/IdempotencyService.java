@@ -19,14 +19,14 @@ public class IdempotencyService {
     }
 
     @Transactional
-    public Optional<IdempotencyKey> claimOrReplay(String key, String path, String rawBody) {
-        String hash = hash(path, rawBody);
+    public Optional<IdempotencyKey> claimOrReplay(String key, String userId, String path, String rawBody) {
+        String hash = hash(userId, path, rawBody);
         Optional<IdempotencyKey> existing = repository.findById(key);
 
         if (existing.isPresent()) {
             IdempotencyKey found = existing.get();
             if (!found.getRequestHash().equals(hash)) {
-                throw new IllegalStateException("Idempotency key reused with different content");
+                throw new IdempotencyKeyReuseException(key);
             }
             if ("IN_PROGRESS".equals(found.getStatus())) {
                 throw new IdempotencyInProgressException(key);
@@ -51,10 +51,10 @@ public class IdempotencyService {
         repository.save(found);
     }
 
-    private String hash(String path, String rawBody) {
+    private String hash(String userId, String path, String rawBody) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String input = path + rawBody;
+            String input = userId + path + rawBody;
             byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes);
         } catch (NoSuchAlgorithmException e) {
