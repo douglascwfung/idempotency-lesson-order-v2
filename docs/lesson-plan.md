@@ -424,3 +424,55 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest test
 ```
 
+## Lesson 9: Handle the Race on the Primary Key
+
+The `key_value` column is already the primary key, so a second insert of the same key fails. Two concurrent requests that both see no existing row will both attempt the insert. The second insert throws `DataIntegrityViolationException`. The service catches the exception, reloads the key, and either replays the stored result or returns 409 if the first request is still in progress.
+
+### Learning Objectives
+
+- Recognise that the primary key already enforces uniqueness.
+- Catch `DataIntegrityViolationException` on the claim insert.
+- Reload the key after the conflict and apply the same replay or in-progress rules.
+
+### Key Concepts
+
+The first request inserts the key with status `IN_PROGRESS`. A concurrent request that also finds no row attempts the same insert. The database rejects the second insert because of the primary key. The service catches the violation, loads the row that the first request inserted, and continues with the normal rules: hash mismatch throws `IdempotencyKeyReuseException`, `IN_PROGRESS` throws `IdempotencyInProgressException`, and `COMPLETED` returns the stored response. The front end is expected to send one request at a time; the server check is a backstop.
+
+### What the Client Sees Without This Change
+
+Without the try/catch, the second request receives an HTTP 500. The `DataIntegrityViolationException` leaves the service uncaught and becomes a server error. The client does not receive a 409 with the running key, and it does not receive the stored response. The client cannot distinguish a concurrent retry from a true server failure, and it has no key to retry with.
+
+### What You Will Build
+
+- A try/catch around `saveAndFlush` in `IdempotencyService.claimOrReplay`.
+- A reload of the key after the constraint violation.
+- A unit test that simulates the concurrent claim of an in-progress key.
+
+### Deliberate Design Decisions
+
+No additional unique constraint is added. The primary key is sufficient. The race is handled by catching the constraint violation rather than by a lock.
+
+### Implementation Outline
+
+1. Change the claim insert to `saveAndFlush` inside a try/catch for `DataIntegrityViolationException`.
+2. On the exception, reload the key and apply the existing hash and status checks.
+3. Add `IdempotencyServiceRaceTest`.
+
+### Verify Your Work
+
+When implementing claim-then-complete at this stage:
+
+```
+mvn -Dtest=IdempotencyServiceRaceTest test
+```
+
+The method `concurrentClaimOfInProgressKeyThrows` must pass.
+
+On `main` after Lesson 11, the race test asserts completed-replay / hash-mismatch instead (`concurrentClaimOfSameKeyReplaysCompletedResponse`, `concurrentClaimWithDifferentHashThrowsReuse`).
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerTest,OrderOptimisticLockTest,OrderServiceTransactionTest test
+```
+

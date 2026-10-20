@@ -1,5 +1,6 @@
 package lab.lesson.idem;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +39,19 @@ public class IdempotencyService {
         claim.setKeyValue(key);
         claim.setRequestHash(hash);
         claim.setStatus("IN_PROGRESS");
-        repository.save(claim);
-        return Optional.empty();
+        try {
+            repository.saveAndFlush(claim);
+            return Optional.empty();
+        } catch (DataIntegrityViolationException e) {
+            IdempotencyKey raced = repository.findById(key).orElseThrow();
+            if (!raced.getRequestHash().equals(hash)) {
+                throw new IdempotencyKeyReuseException(key);
+            }
+            if ("IN_PROGRESS".equals(raced.getStatus())) {
+                throw new IdempotencyInProgressException(key);
+            }
+            return Optional.of(raced);
+        }
     }
 
     @Transactional
