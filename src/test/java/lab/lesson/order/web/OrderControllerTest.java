@@ -1,5 +1,7 @@
 package lab.lesson.order.web;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
@@ -24,11 +26,17 @@ class OrderControllerTest {
     @Mock
     private OrderService orderService;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
     @InjectMocks
     private OrderController orderController;
 
     @Test
-    void createDelegatesToServiceAndReturnsCreated() {
+    void createDelegatesToServiceAndReturnsCreated() throws Exception {
         CreateOrderRequest request = new CreateOrderRequest(
                 "Alice",
                 List.of(new CreateOrderRequest.OrderLineRequest("SKU-1", 2, new BigDecimal("10.00")))
@@ -38,7 +46,7 @@ class OrderControllerTest {
         ));
         when(orderService.create(any(CreateOrderRequest.class))).thenReturn(response);
 
-        OrderResponse result = orderController.create(request);
+        OrderResponse result = orderController.create(null, request);
 
         assertThat(result).isEqualTo(response);
         verify(orderService).create(request);

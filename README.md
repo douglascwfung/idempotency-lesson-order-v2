@@ -61,8 +61,9 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 2 | `@Transactional` service boundary |
 | 3 | Optimistic locking with `@Version` on Order |
 | 4 | Line `@Version` and single-line endpoints |
+| 5 | Idempotency key claim and replay on create |
 
-Tag `lesson-4` is the tip of this lesson.
+Tag `lesson-5` is the tip of this lesson.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
@@ -76,8 +77,9 @@ Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 | `lesson-2` | End state after Lesson 2 |
 | `lesson-3` | End state after Lesson 3 |
 | `lesson-4` | End state after Lesson 4 |
+| `lesson-5` | End state after Lesson 5 |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-4        # end of Lesson 4
+git checkout lesson-5        # end of Lesson 5
 ```

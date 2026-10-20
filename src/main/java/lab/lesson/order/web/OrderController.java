@@ -1,25 +1,52 @@
 package lab.lesson.order.web;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lab.lesson.idem.IdempotencyKey;
+import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Optional;
+
 @RestController
 @RequestMapping("/orders")
 public class OrderController {
 
     private final OrderService orderService;
+    private final IdempotencyService idempotencyService;
+    private final ObjectMapper objectMapper;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService,
+                           IdempotencyService idempotencyService,
+                           ObjectMapper objectMapper) {
         this.orderService = orderService;
+        this.idempotencyService = idempotencyService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderResponse create(@RequestBody CreateOrderRequest request) {
-        return orderService.create(request);
+    public OrderResponse create(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody CreateOrderRequest request) throws Exception {
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return orderService.create(request);
+        }
+
+        String rawBody = objectMapper.writeValueAsString(request);
+        Optional<IdempotencyKey> replay = idempotencyService.claimOrReplay(idempotencyKey, "/orders", rawBody);
+
+        if (replay.isPresent()) {
+            return objectMapper.readValue(replay.get().getResponseBody(), OrderResponse.class);
+        }
+
+        OrderResponse response = orderService.create(request);
+        idempotencyService.complete(idempotencyKey, 201, objectMapper.writeValueAsString(response));
+        return response;
     }
 
     @GetMapping("/{id}")
