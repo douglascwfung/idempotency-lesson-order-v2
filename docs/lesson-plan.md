@@ -476,3 +476,62 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerTest,OrderOptimisticLockTest,OrderServiceTransactionTest test
 ```
 
+## Lesson 10: Idempotency Key on Add-Line
+
+Add-line requires an idempotency key. The `Idempotency-Key` header is mandatory (`required = true`); there is no non-idempotent add-line path. The hash includes the Order id so a key reused for a different Order is rejected. A retry with the same key and body returns the stored line instead of inserting another.
+
+At this point in the sequence you still use claim-then-complete. Lesson 11 switches create and add-line to `runOrReplay` (COMPLETED-only, no in-progress status).
+
+### Learning Objectives
+
+- Require an `Idempotency-Key` on `POST /orders/{id}/lines` (`@RequestHeader(..., required = true)`).
+- Include the Order id in the path that is hashed.
+- Replay a completed add-line (and, under claim-then-complete, return 409 while the claim is in progress).
+
+### Key Concepts
+
+The controller builds the path as `/orders/{id}/lines`. The hash is `userId + path + rawBody`. Because the path contains the Order id, the same key and body applied to a different Order produces a different hash and is rejected as key reuse. Missing or blank keys are rejected by Spring before the handler runs (HTTP 400) — unlike create, add-line has no bypass that calls the service directly. Claim, replay, and in-progress rules match create until Lesson 11 replaces them with `runOrReplay`. The front end is expected to send one request at a time; the server check is a backstop.
+
+### What You Will Build
+
+- A required `Idempotency-Key` header on `OrderController.addLine` (`required = true`).
+- A path that includes the Order id.
+- Unit tests for new-key and completed-key replay on add-line.
+- A MockMvc test that a missing `Idempotency-Key` yields HTTP 400.
+
+### Deliberate Design Decisions
+
+Update and delete of a line do not take a key. They are already safe when the handler checks the line version or deletes by id. Create may still accept an optional key so Lesson 1-style non-idempotent creates remain demonstrable; add-line does not.
+
+### Implementation Outline
+
+1. Add the `Idempotency-Key` header to `addLine` with `required = true` (no blank-key bypass).
+2. Build the path as `/orders/{id}/lines` and pass it to the idempotency entry point (`claimOrReplay` here; `runOrReplay` after Lesson 11).
+3. On replay, deserialize the stored body as `OrderLineResponse`.
+4. Add `OrderControllerAddLineIdempotencyTest` and a MockMvc test for a missing key.
+
+### Verify Your Work
+
+```
+mvn -Dtest=OrderControllerAddLineIdempotencyTest test
+```
+
+On `main` (after Lessons 11–12):
+
+- `addLineWithNewKeyRunOrReplayCompletes`
+- `addLineWithCompletedKeyReplays`
+
+Run the missing-key MockMvc test (proves required header → 400):
+
+```
+mvn -Dtest=OrderControllerAddLineMissingKeyMockMvcTest test
+```
+
+The method `addLineWithoutIdempotencyKeyReturns400` must pass.
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest,OrderLineServiceTest test
+```
+

@@ -66,8 +66,9 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 7 | `X-User-Id` header; 409 body with running key |
 | 8 | Authenticated principal as user id |
 | 9 | Primary-key race on concurrent claim |
+| 10 | Required idempotency key on add-line |
 
-Tag `lesson-9` is the tip of this lesson.
+Tag `lesson-10` is the tip of this lesson.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
@@ -86,8 +87,9 @@ Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 | `lesson-7` | End state after Lesson 7 |
 | `lesson-8` | End state after Lesson 8 |
 | `lesson-9` | End state after Lesson 9 |
+| `lesson-10` | End state after Lesson 10 |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-9        # end of Lesson 9
+git checkout lesson-10        # end of Lesson 10
 ```
