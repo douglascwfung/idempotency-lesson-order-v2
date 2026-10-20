@@ -12,6 +12,7 @@ public record OrderResponse(
             Long id,
             String sku,
             Integer quantity,
-            BigDecimal unitPrice
+            BigDecimal unitPrice,
+            Integer version
     ) {}
 }

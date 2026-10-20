@@ -1,0 +1,1 @@
+ALTER TABLE order_details ADD COLUMN version INTEGER NOT NULL DEFAULT 0;

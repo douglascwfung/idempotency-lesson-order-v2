@@ -8,8 +8,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -36,9 +34,9 @@ class OrderControllerTest {
                 List.of(new CreateOrderRequest.OrderLineRequest("SKU-1", 2, new BigDecimal("10.00")))
         );
         OrderResponse response = new OrderResponse(1L, "Alice", List.of(
-                new OrderResponse.OrderLineResponse(10L, "SKU-1", 2, new BigDecimal("10.00"))
+                new OrderResponse.OrderLineResponse(10L, "SKU-1", 2, new BigDecimal("10.00"), 0)
         ));
-        when(orderService.create(request)).thenReturn(response);
+        when(orderService.create(any(CreateOrderRequest.class))).thenReturn(response);
 
         OrderResponse result = orderController.create(request);
 
@@ -64,7 +62,7 @@ class OrderControllerTest {
                 List.of(new CreateOrderRequest.OrderLineRequest("SKU-2", 1, new BigDecimal("20.00")))
         );
         OrderResponse response = new OrderResponse(1L, "Bob", List.of(
-                new OrderResponse.OrderLineResponse(11L, "SKU-2", 1, new BigDecimal("20.00"))
+                new OrderResponse.OrderLineResponse(11L, "SKU-2", 1, new BigDecimal("20.00"), 0)
         ));
         when(orderService.replace(eq(1L), any(CreateOrderRequest.class))).thenReturn(response);
 

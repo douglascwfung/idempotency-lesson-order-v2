@@ -165,3 +165,54 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderServiceTransactionTest,OrderControllerTest test
 ```
 
+## Lesson 4: Line Version and Single-Line Endpoints
+
+An OrderDetail carries its own version. New endpoints add, update, or delete one line without loading the rest of the Order. An update of a line is guarded by the line version.
+
+### Learning Objectives
+
+- Add a version column to OrderDetail.
+- Expose endpoints that operate on one line.
+- Reject a stale line version before the write.
+
+### Key Concepts
+
+The `@Version` annotation on OrderDetail causes Hibernate to increment the version on each successful update of that line. The service loads only the named line by line id and Order id. It compares the version the client sent with the loaded version. A mismatch throws `ObjectOptimisticLockingFailureException`. The rest of the Order is not loaded. The whole-list replace from Lesson 1 remains available.
+
+### What You Will Build
+
+- A `version` field on `OrderDetail`.
+- A Flyway migration `V4__add_order_detail_version.sql` that adds the column.
+- `OrderDetailRepository` with `findByIdAndOrderId`.
+- `OrderService` methods `addLine`, `updateLine`, and `deleteLine`.
+- Controller endpoints `POST /orders/{id}/lines`, `PUT /orders/{id}/lines/{lineId}`, and `DELETE /orders/{id}/lines/{lineId}`.
+- A unit test that rejects a stale line version.
+
+### Deliberate Design Decisions
+
+The line version is independent of the Order version. A change to one line does not require loading the other lines. No idempotency key is added to the line endpoints in this lesson (Lesson 10 adds a required key on add-line).
+
+### Implementation Outline
+
+1. Add `@Version` to `OrderDetail` and the migration.
+2. Add `OrderDetailRepository`.
+3. Add the three service methods.
+4. Add the three controller endpoints.
+5. Add `OrderLineServiceTest.updateLineRejectsStaleVersion`.
+
+### Verify Your Work
+
+Run the new line test:
+
+```
+mvn -Dtest=OrderLineServiceTest test
+```
+
+The method `updateLineRejectsStaleVersion` must pass.
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderControllerTest,OrderOptimisticLockTest,OrderServiceTransactionTest test
+```
+
