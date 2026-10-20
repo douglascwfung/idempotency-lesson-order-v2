@@ -378,3 +378,49 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest,OrderControllerTest test
 ```
 
+## Lesson 8: Authenticated Principal as the User Id
+
+The `X-User-Id` header is removed. The user id now comes from the authenticated principal in the Spring Security context. The hash, the claim/replay path, and the 409 behaviour remain unchanged.
+
+### Learning Objectives
+
+- Obtain the user id from `SecurityContextHolder`.
+- Configure a minimal Spring Security filter chain that permits all requests.
+- Keep the rest of the idempotency behaviour unchanged.
+
+### Key Concepts
+
+The controller calls `SecurityContextHolder.getContext().getAuthentication()`. When the authentication is present and is not the anonymous principal, `authentication.getName()` supplies the user id. When no authentication is present the value falls back to `anonymous`. The hash remains `userId + path + rawBody`. The front end is expected to send one request at a time; the server check is a backstop.
+
+### What You Will Build
+
+- The `spring-boot-starter-security` dependency.
+- `SecurityConfig` under `lab.lesson.common` that permits all requests and disables CSRF.
+- A private `currentUserId` method on `OrderController`.
+- Updated unit tests that set a `UsernamePasswordAuthenticationToken` in the security context.
+
+### Deliberate Design Decisions
+
+Spring Security is introduced only to supply the principal. No authentication filter or password encoder is configured. All endpoints remain open. The user id is taken from the security context so that a later lesson can add real authentication without changing the hash.
+
+### Implementation Outline
+
+1. Add `spring-boot-starter-security` to the pom.
+2. Add `SecurityConfig` that permits all requests.
+3. Replace the `X-User-Id` header parameter with a call to `currentUserId`.
+4. Update the controller tests to set the security context.
+
+### Verify Your Work
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerTest test
+```
+
+All methods in both classes must pass.
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest test
+```
+
