@@ -73,3 +73,49 @@ curl -X POST http://localhost:8080/orders \
 
 Repeat the same request. Both succeed and produce different ids.
 
+## Lesson 2: Transaction Boundary with @Transactional
+
+The Order and its OrderDetail lines form one unit of work. Without an explicit transaction, a failure after the Order is saved but before the lines are saved would leave an incomplete aggregate. The `@Transactional` annotation on the service methods creates the boundary.
+
+### Learning Objectives
+
+- Place `@Transactional` on the service methods that mutate or load the aggregate.
+- Understand that the transaction starts when the annotated method is entered and commits when the method returns normally.
+- Confirm the boundary with a Spring Boot integration test.
+
+### Key Concepts
+
+The `@Transactional` annotation on `OrderService.create` and `OrderService.replace` starts a transaction before the method body runs. The repository `save` calls participate in that transaction. When the method returns, the transaction commits. If an exception leaves the method, the transaction rolls back. The `get` method is marked `readOnly = true` because it does not mutate state.
+
+### What You Will Build
+
+- `@Transactional` on the mutating methods of `OrderService`.
+- `@Transactional(readOnly = true)` on the read method.
+- A Spring Boot test (`OrderServiceTransactionTest`) that verifies the Order and its lines are saved together.
+
+### Deliberate Design Decisions
+
+The transaction boundary is the service method. The controller does not start a transaction. The repository does not start a transaction. The service owns the unit of work for the aggregate. No version column is added yet. No idempotency key is added yet.
+
+### Implementation Outline
+
+1. Add `@Transactional` to `OrderService.create` and `OrderService.replace`.
+2. Add `@Transactional(readOnly = true)` to `OrderService.get`.
+3. Add `OrderServiceTransactionTest` that creates an Order and asserts both the Order and its lines are present after the call.
+
+### Verify Your Work
+
+Run the new integration test:
+
+```
+mvn -Dtest=OrderServiceTransactionTest test
+```
+
+The method `createSavesOrderAndLinesInOneTransaction` must pass.
+
+The controller unit tests from Lesson 1 continue to pass:
+
+```
+mvn -Dtest=OrderControllerTest test
+```
+

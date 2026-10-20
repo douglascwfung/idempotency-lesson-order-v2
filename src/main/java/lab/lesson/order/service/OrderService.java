@@ -7,6 +7,7 @@ import lab.lesson.order.repository.OrderRepository;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ public class OrderService {
         this.orderRepository = orderRepository;
     }
 
+    @Transactional
     public OrderResponse create(CreateOrderRequest request) {
         Order order = new Order();
         order.setCustomerName(request.customerName());
@@ -33,12 +35,14 @@ public class OrderService {
         return toResponse(saved);
     }
 
+    @Transactional(readOnly = true)
     public OrderResponse get(Long id) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id));
         return toResponse(order);
     }
 
+    @Transactional
     public OrderResponse replace(Long id, CreateOrderRequest request) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id));
