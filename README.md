@@ -63,8 +63,9 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 4 | Line `@Version` and single-line endpoints |
 | 5 | Idempotency key claim and replay on create |
 | 6 | User id in the hash; key-reuse rejection |
+| 7 | `X-User-Id` header; 409 body with running key |
 
-Tag `lesson-6` is the tip of this lesson.
+Tag `lesson-7` is the tip of this lesson.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
@@ -80,8 +81,9 @@ Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 | `lesson-4` | End state after Lesson 4 |
 | `lesson-5` | End state after Lesson 5 |
 | `lesson-6` | End state after Lesson 6 |
+| `lesson-7` | End state after Lesson 7 |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-6        # end of Lesson 6
+git checkout lesson-7        # end of Lesson 7
 ```

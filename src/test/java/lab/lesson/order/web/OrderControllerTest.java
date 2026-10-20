@@ -46,7 +46,7 @@ class OrderControllerTest {
         ));
         when(orderService.create(any(CreateOrderRequest.class))).thenReturn(response);
 
-        OrderResponse result = orderController.create(null, request);
+        OrderResponse result = orderController.create(null, null, request);
 
         assertThat(result).isEqualTo(response);
         verify(orderService).create(request);

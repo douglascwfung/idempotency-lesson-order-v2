@@ -324,3 +324,57 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest,OrderControllerTest test
 ```
 
+## Lesson 7: User Id Header and 409 Body with the Running Key
+
+The fixed user id is replaced by an `X-User-Id` request header. The 409 response for an in-progress key includes the running key in the body so the client can retry with it.
+
+### Learning Objectives
+
+- Obtain the user id from the `X-User-Id` header.
+- Return the running key in the body of a 409 for an in-progress request.
+- Keep the hash and the reuse rejection unchanged.
+
+### Key Concepts
+
+The controller reads the user id from the `X-User-Id` header. When the header is absent the value falls back to `anonymous`. The `IdempotencyExceptionHandler` catches `IdempotencyInProgressException` and returns HTTP 409 with a body that contains the key. The client can then retry with the same key. The hash remains `userId + path + rawBody`. The front end is expected to send one request at a time; the server check is a backstop.
+
+### What You Will Build
+
+- An `X-User-Id` header parameter on `OrderController.create`.
+- `IdempotencyConflictResponse` under `lab.lesson.idem` and `IdempotencyExceptionHandler` under `lab.lesson.common`.
+- A unit test that verifies an in-progress key throws with the key present.
+
+### Deliberate Design Decisions
+
+The user id comes from a header for this lesson. A later lesson can replace the header with the authenticated principal. The 409 body contains the key so the client can retry with it. No change is made to the hash algorithm. (Lesson 11 removes the in-progress path entirely.)
+
+### Implementation Outline
+
+1. Add the `X-User-Id` header parameter to the controller.
+2. Add `IdempotencyConflictResponse` and `IdempotencyExceptionHandler`.
+3. Update the controller tests to pass the user id.
+4. Add `createWithInProgressKeyThrowsWithKey`.
+
+### Verify Your Work
+
+When implementing claim-then-complete at this stage:
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest test
+```
+
+Methods that must pass at this stage:
+
+- `createWithNewKeyClaimsAndCompletes`
+- `createWithCompletedKeyReplaysStoredResponse`
+- `createWithSameKeyAndDifferentContentThrows`
+- `createWithInProgressKeyThrowsWithKey`
+
+On `main` after Lesson 11 there is no in-progress path; the reuse and replay tests remain.
+
+The earlier tests continue to pass:
+
+```
+mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest,OrderControllerTest test
+```
+

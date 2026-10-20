@@ -51,7 +51,7 @@ class OrderControllerIdempotencyTest {
         when(orderService.create(request)).thenReturn(response);
         when(objectMapper.writeValueAsString(response)).thenReturn("{\"id\":1}");
 
-        OrderResponse result = orderController.create("key-1", request);
+        OrderResponse result = orderController.create("key-1", "user-1", request);
 
         assertThat(result).isEqualTo(response);
         verify(idempotencyService).complete(eq("key-1"), eq(201), any());
@@ -68,7 +68,7 @@ class OrderControllerIdempotencyTest {
         when(idempotencyService.claimOrReplay(eq("key-2"), eq("user-1"), eq("/orders"), any())).thenReturn(Optional.of(key));
         when(objectMapper.readValue(eq("{\"id\":5}"), eq(OrderResponse.class))).thenReturn(stored);
 
-        OrderResponse result = orderController.create("key-2", request);
+        OrderResponse result = orderController.create("key-2", "user-1", request);
 
         assertThat(result).isEqualTo(stored);
         verify(orderService, org.mockito.Mockito.never()).create(any());
@@ -82,7 +82,20 @@ class OrderControllerIdempotencyTest {
         when(idempotencyService.claimOrReplay(eq("key-3"), eq("user-1"), eq("/orders"), any()))
                 .thenThrow(new IdempotencyKeyReuseException("key-3"));
 
-        assertThatThrownBy(() -> orderController.create("key-3", request))
+        assertThatThrownBy(() -> orderController.create("key-3", "user-1", request))
                 .isInstanceOf(IdempotencyKeyReuseException.class);
+    }
+
+    @Test
+    void createWithInProgressKeyThrowsWithKey() throws Exception {
+        CreateOrderRequest request = new CreateOrderRequest("Alice", List.of());
+
+        when(objectMapper.writeValueAsString(request)).thenReturn("{}");
+        when(idempotencyService.claimOrReplay(eq("key-4"), eq("user-1"), eq("/orders"), any()))
+                .thenThrow(new lab.lesson.idem.IdempotencyInProgressException("key-4"));
+
+        assertThatThrownBy(() -> orderController.create("key-4", "user-1", request))
+                .isInstanceOf(lab.lesson.idem.IdempotencyInProgressException.class)
+                .hasFieldOrPropertyWithValue("key", "key-4");
     }
 }
