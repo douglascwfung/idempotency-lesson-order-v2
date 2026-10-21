@@ -16,7 +16,7 @@ Because the lambda runs inside the key method's `@Transactional` box, a success 
 
 ## Why this helps later
 
-Complicated domain work stays outside the key method. A request that mixes adds and updates can pass one lambda that performs all of those writes. Different endpoints can use different exception policies inside their own work without changing how the key is claimed or replayed. A new idempotent endpoint passes a new lambda; it does not copy `runOrReplay` wiring.
+Complicated domain work stays outside the key method. Lesson 13 now does exactly that: `POST /orders/{id}/changes` passes one lambda that runs mixed add+update work (`OrderService.saveChanges`) inside the same `runOrReplay` transaction. Early version mismatches use `PermanentRejection` → `FAILED` without changing how the key is claimed. Different endpoints can use different exception policies inside their own work without copying `runOrReplay` wiring. A new idempotent endpoint passes a new lambda.
 
 ## Tradeoff
 

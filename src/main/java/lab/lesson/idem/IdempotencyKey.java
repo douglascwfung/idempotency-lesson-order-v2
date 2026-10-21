@@ -22,9 +22,10 @@ public class IdempotencyKey {
     private String requestHash;
 
     /**
-     * After Lesson 11 this is always {@link IdempotencyKeyStatus#COMPLETED}.
-     * Earlier teaching tags used {@code IN_PROGRESS} then {@code COMPLETED};
-     * those paths are historical and not present from this tip onward.
+     * Lesson 11 removed {@code IN_PROGRESS}; successful keys are {@link IdempotencyKeyStatus#COMPLETED}.
+     * Lesson 13 may set {@link IdempotencyKeyStatus#FAILED} when {@link PermanentRejection}
+     * is thrown before any business row changes. Those paths are the only allowed statuses
+     * from this tip onward.
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

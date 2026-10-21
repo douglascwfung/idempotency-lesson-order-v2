@@ -1,6 +1,6 @@
 # Lesson Plan
 
-Sections follow continuous reading order: Lessons 1 through 12. There is no Lesson 10 gap and no historical renumbering — numbers match the teaching sequence.
+Sections follow continuous reading order: Lessons 1 through 13. There is no Lesson 10 gap and no historical renumbering — numbers match the teaching sequence.
 
 ## Lesson 1: Basic Order Aggregate and REST Endpoints
 
@@ -676,3 +676,61 @@ The controller idempotency tests continue to pass:
 ```
 mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerAddLineIdempotencyTest test
 ```
+
+## Lesson 13: Accept One Request for Adds and Updates
+
+The front end can send one request that adds lines and updates lines at the same time. The back end must handle that mix in one save inside the `runOrReplay` work lambda, so a later failure cannot leave the Order half changed. Lesson 8 in this repo already used the Spring Security principal; this lesson ports the mixed-change teaching content as Lesson 13 on top of the Lesson 11–12 single-transaction design.
+
+### Learning Objectives
+
+By the end of this lesson you will be able to:
+
+- Accept one request that adds lines and updates lines together under one required `Idempotency-Key`.
+- Check every version before writing, and store an early mismatch as `FAILED` via `PermanentRejection`.
+- Let a version conflict found at the database leave `runOrReplay` so the transaction rolls back.
+- Keep the Lesson 11–12 rules: one transaction, work lambda, no `IN_PROGRESS`, user id from the Security principal.
+
+### Key Concepts
+
+- **One request**: The front end sends one `POST /orders/{id}/changes` that adds lines and updates lines at the same time. The controller passes `() -> orderService.saveChanges(id, request)` into `runOrReplay`. Allowing separate calls would store the first change, and then a later call could fail, which leaves the Order half changed.
+- **Early rejection**: The service checks the Order version and every named line version before writing. A mismatch throws `PermanentRejection` before any line changes. `runOrReplay` catches only that type, stores the key as `FAILED` with the rejection status and body, and rethrows so the advice returns 409. `noRollbackFor = PermanentRejection` keeps the FAILED key while nothing else was written.
+- **Conflict at the database**: A version that moved after the check is a different event (`OptimisticLockingFailureException` / `ObjectOptimisticLockingFailureException`). That error must leave `runOrReplay`. Catching it would keep the line changes the client was told failed. Do not catch those as `PermanentRejection`.
+- **FAILED is finished, not in progress**: Lesson 11 removed `IN_PROGRESS`. Lesson 13 adds `FAILED` only for permanent early rejections. Flyway `V6` allows `COMPLETED` or `FAILED`. A retry with the same key and hash replays the same rejection by throwing `PermanentRejection` again from `replayOrReject`.
+
+### What You Will Build
+
+- `PermanentRejection` and `IdempotencyKeyStatus.FAILED`.
+- Flyway `V6__idempotency_status_allow_failed.sql`.
+- `runOrReplay` catch for `PermanentRejection` (store FAILED, rethrow) and replay of FAILED keys.
+- `SaveOrderChangesRequest`, `OrderService.saveChanges` / `applyChanges` / `insertLine`, and `POST /orders/{id}/changes`.
+- `OrderResponse.version` so clients can send the Order version on `/changes`.
+- Exception handler mapping for `PermanentRejection`.
+- Tests: `OrderControllerTest.saveChangesUsesOneIdempotentRequest` and `OrderServiceTest.saveChangesRejectsAStaleLineBeforeWriting`.
+
+### Deliberate Design Decisions
+
+- Check every version before changing anything; throw `PermanentRejection` only for those early mismatches.
+- Catch only `PermanentRejection` inside `runOrReplay`. Do not catch a database version conflict.
+- Store FAILED and rethrow (instead of returning a success DTO) so the HTTP layer can return 409 with the stored JSON body.
+- `applyChanges` and `insertLine` have no `@Transactional` of their own; they join the lambda's open transaction.
+- Keep Spring Security `currentUserId()` — do not bring back `X-User-Id` for this endpoint.
+
+### Implementation Outline
+
+1. Accept one required `Idempotency-Key` and one body that contains the Order version, the line updates, and the additions.
+2. In `applyChanges`, check the Order version and every named line version before writing.
+3. On a mismatch, throw `PermanentRejection`. `runOrReplay` stores FAILED and rethrows.
+4. On a match, update the lines and insert the additions via `insertLine`, then return `OrderResponse` (reload the Order so new lines appear).
+5. Let a database version conflict leave `runOrReplay`.
+6. On replay of a FAILED key (or `responseStatus >= 400`), throw `PermanentRejection` with the stored status and body.
+
+### Verify Your Work
+
+```
+mvn -Dtest=OrderControllerTest,OrderServiceTest test
+```
+
+The following methods must pass:
+
+- `OrderControllerTest.saveChangesUsesOneIdempotentRequest`
+- `OrderServiceTest.saveChangesRejectsAStaleLineBeforeWriting`

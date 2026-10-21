@@ -56,7 +56,7 @@ class OrderControllerIdempotencyTest {
         CreateOrderRequest request = new CreateOrderRequest("Alice", List.of(
                 new CreateOrderRequest.OrderLineRequest("SKU-1", 1, new BigDecimal("10.00"))
         ));
-        OrderResponse response = new OrderResponse(1L, "Alice", List.of());
+        OrderResponse response = new OrderResponse(1L, "Alice", 0, List.of());
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"customerName\":\"Alice\"}");
         setUser("user-1");
@@ -77,7 +77,7 @@ class OrderControllerIdempotencyTest {
     @Test
     void createWithCompletedKeyReplaysStoredResponse() throws Exception {
         CreateOrderRequest request = new CreateOrderRequest("Alice", List.of());
-        OrderResponse stored = new OrderResponse(5L, "Alice", List.of());
+        OrderResponse stored = new OrderResponse(5L, "Alice", 0, List.of());
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{}");
         setUser("user-1");

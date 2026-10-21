@@ -5,6 +5,7 @@ import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
+import lab.lesson.order.web.dto.SaveOrderChangesRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -80,6 +81,21 @@ public class OrderController {
                 () -> orderService.addLine(id, request),
                 objectMapper::writeValueAsString,
                 body -> objectMapper.readValue(body, OrderResponse.OrderLineResponse.class));
+    }
+
+    @PostMapping("/{id}/changes")
+    public OrderResponse saveChanges(
+            @PathVariable Long id,
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
+            @RequestBody SaveOrderChangesRequest request) throws Exception {
+        String userId = currentUserId();
+        String path = "/orders/" + id + "/changes";
+        String rawBody = objectMapper.writeValueAsString(request);
+        return idempotencyService.runOrReplay(
+                idempotencyKey, userId, path, rawBody, 200,
+                () -> orderService.saveChanges(id, request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class));
     }
 
     @PutMapping("/{id}/lines/{lineId}")

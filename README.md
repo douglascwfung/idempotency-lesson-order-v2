@@ -4,7 +4,7 @@ This repository teaches progressive Spring Boot concepts using an Order aggregat
 
 The sequence covers parent-child aggregates, `@Transactional` boundaries, optimistic locking, and idempotency keys.
 
-This is a clean reading-order remake of [`idempotency-lesson-order`](https://github.com/douglascwfung/idempotency-lesson-order). Lesson numbers are continuous 1..12 and match the teaching sequence (no historical tag/reading-order mismatch).
+This is a clean reading-order remake of [`idempotency-lesson-order`](https://github.com/douglascwfung/idempotency-lesson-order). Lesson numbers are continuous 1..13 and match the teaching sequence (no historical tag/reading-order mismatch).
 
 ## How to Run
 
@@ -69,8 +69,9 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 10 | Required idempotency key on add-line |
 | 11 | Single transaction: key + Order as `COMPLETED` (direct `OrderService` call, no lambda) |
 | 12 | Lambda work callback into `runOrReplay` |
+| 13 | One request for adds + updates (`PermanentRejection` + `FAILED`) |
 
-`main` holds the **final** design: COMPLETED-only status (`IdempotencyKeyStatus` + Flyway `V5`), `runOrReplay` with a work lambda, and required `Idempotency-Key` on add-line.
+`main` holds the **final** design: `COMPLETED`/`FAILED` status (no `IN_PROGRESS`; Flyway `V5`/`V6`), `runOrReplay` with a work lambda (including mixed `/changes`), and required `Idempotency-Key` on add-line and changes.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 

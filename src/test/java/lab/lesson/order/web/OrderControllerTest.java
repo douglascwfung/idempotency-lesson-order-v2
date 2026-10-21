@@ -5,11 +5,15 @@ import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
+import lab.lesson.order.web.dto.SaveOrderChangesRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -35,13 +39,18 @@ class OrderControllerTest {
     @InjectMocks
     private OrderController orderController;
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void createDelegatesToServiceAndReturnsCreated() throws Exception {
         CreateOrderRequest request = new CreateOrderRequest(
                 "Alice",
                 List.of(new CreateOrderRequest.OrderLineRequest("SKU-1", 2, new BigDecimal("10.00")))
         );
-        OrderResponse response = new OrderResponse(1L, "Alice", List.of(
+        OrderResponse response = new OrderResponse(1L, "Alice", 0, List.of(
                 new OrderResponse.OrderLineResponse(10L, "SKU-1", 2, new BigDecimal("10.00"), 0)
         ));
         when(orderService.create(request)).thenReturn(response);
@@ -54,7 +63,7 @@ class OrderControllerTest {
 
     @Test
     void getDelegatesToService() {
-        OrderResponse response = new OrderResponse(1L, "Alice", List.of());
+        OrderResponse response = new OrderResponse(1L, "Alice", 0, List.of());
         when(orderService.get(1L)).thenReturn(response);
 
         OrderResponse result = orderController.get(1L);
@@ -69,7 +78,7 @@ class OrderControllerTest {
                 "Bob",
                 List.of(new CreateOrderRequest.OrderLineRequest("SKU-2", 1, new BigDecimal("20.00")))
         );
-        OrderResponse response = new OrderResponse(1L, "Bob", List.of(
+        OrderResponse response = new OrderResponse(1L, "Bob", 1, List.of(
                 new OrderResponse.OrderLineResponse(11L, "SKU-2", 1, new BigDecimal("20.00"), 0)
         ));
         when(orderService.replace(eq(1L), any(CreateOrderRequest.class))).thenReturn(response);
@@ -78,5 +87,31 @@ class OrderControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(orderService).replace(1L, request);
+    }
+
+    @Test
+    void saveChangesUsesOneIdempotentRequest() throws Exception {
+        SaveOrderChangesRequest request = new SaveOrderChangesRequest(
+                0,
+                List.of(new SaveOrderChangesRequest.LineUpdate(
+                        7L,
+                        new SaveOrderChangesRequest.LineChange("widget", 4, new BigDecimal("9.50"), 0))),
+                List.of(new CreateOrderRequest.OrderLineRequest("gadget", 1, new BigDecimal("3.00")))
+        );
+        OrderResponse response = new OrderResponse(1L, "Ada", 0, List.of());
+
+        when(objectMapper.writeValueAsString(request)).thenReturn("{\"version\":0}");
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken("user-1", null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        when(idempotencyService.runOrReplay(
+                eq("save-1"), eq("user-1"), eq("/orders/1/changes"), any(), eq(200), any(), any(), any()))
+                .thenReturn(response);
+
+        OrderResponse result = orderController.saveChanges(1L, "save-1", request);
+
+        assertThat(result).isEqualTo(response);
+        verify(idempotencyService).runOrReplay(
+                eq("save-1"), eq("user-1"), eq("/orders/1/changes"), any(), eq(200), any(), any(), any());
     }
 }

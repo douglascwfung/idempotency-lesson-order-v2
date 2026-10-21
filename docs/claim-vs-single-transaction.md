@@ -18,7 +18,7 @@ The service inserts the key as `IN_PROGRESS` and commits. It then creates the Or
 
 ## Single transaction
 
-The service inserts the key already as `COMPLETED`, writes the Order, and stores the response body inside one transaction. There is no `IN_PROGRESS` status at any point. Controllers call `runOrReplay`. Lesson 11 invoked `OrderService` directly inside that method; Lesson 12 (this tip) passes Order work as a lambda. `IdempotencyKeyStatus.COMPLETED` and Flyway `V5` (`CHECK (status = 'COMPLETED')`) enforce that rule at the type and schema layers.
+The service inserts the key already as `COMPLETED`, writes the Order, and stores the response body inside one transaction. There is no `IN_PROGRESS` status at any point. Controllers call `runOrReplay`. Lesson 11 invoked `OrderService` directly inside that method; Lesson 12 passes Order work as a lambda; Lesson 13 uses that lambda for mixed add+update and may finish a key as `FAILED` when `PermanentRejection` is thrown before business writes. Flyway `V5` introduced COMPLETED-only; `V6` allows `COMPLETED` or `FAILED`.
 
 **Crash after key insert.** There is no committed key insert to crash after in isolation. An uncommitted key and an uncommitted Order roll back together. A retry finds no row and starts fresh.
 
@@ -40,3 +40,7 @@ The service inserts the key already as `COMPLETED`, writes the Order, and stores
 | Duplicate Order | Possible around recovery mistakes | Avoided when work shares the transaction |
 | Recovery code | Required for stuck claims | Not required for this path |
 | Best fit | External side effects after claim | Same-database Order + key |
+
+## FAILED without IN_PROGRESS (Lesson 13)
+
+A permanent early rejection (`PermanentRejection`) is stored as `FAILED` with the rejection status and body. That key is a finished rejection: no business rows were written, and there is still no `IN_PROGRESS`. A retry with the same key and hash replays the same rejection. A database optimistic-lock failure is different — it must leave `runOrReplay` so the transaction rolls back and no FAILED (or COMPLETED) key is kept for a half-applied change.
