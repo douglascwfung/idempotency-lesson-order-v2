@@ -1,5 +1,6 @@
 package lab.lesson.idem;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +52,7 @@ public class IdempotencyService {
                              int responseStatus,
                              ThrowingSupplier<T> work,
                              ThrowingFunction<T, String> serializer,
-                             ThrowingFunction<String, T> deserializer) throws Exception {
+                             ThrowingFunction<String, T> deserializer) throws JsonProcessingException {
         String hash = hash(userId, path, rawBody);
         Optional<IdempotencyKey> existing = repository.findById(key);
 
@@ -92,7 +93,7 @@ public class IdempotencyService {
     private <T> T replayOrReject(IdempotencyKey found,
                                  String key,
                                  String hash,
-                                 ThrowingFunction<String, T> deserializer) throws Exception {
+                                 ThrowingFunction<String, T> deserializer) throws JsonProcessingException {
         if (!found.getRequestHash().equals(hash)) {
             throw new IdempotencyKeyReuseException(key);
         }
@@ -110,7 +111,7 @@ public class IdempotencyService {
             byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 
@@ -120,11 +121,11 @@ public class IdempotencyService {
      */
     @FunctionalInterface
     public interface ThrowingSupplier<T> {
-        T get() throws Exception;
+        T get();
     }
 
     @FunctionalInterface
     public interface ThrowingFunction<T, R> {
-        R apply(T value) throws Exception;
+        R apply(T value) throws JsonProcessingException;
     }
 }

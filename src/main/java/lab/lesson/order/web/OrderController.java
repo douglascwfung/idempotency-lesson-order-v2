@@ -1,5 +1,6 @@
 package lab.lesson.order.web;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
@@ -31,7 +32,7 @@ public class OrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse create(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody CreateOrderRequest request) throws Exception {
+            @RequestBody CreateOrderRequest request) throws JsonProcessingException {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             return orderService.create(request);
@@ -66,7 +67,7 @@ public class OrderController {
     public OrderResponse.OrderLineResponse addLine(
             @PathVariable Long id,
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
-            @RequestBody CreateOrderRequest.OrderLineRequest request) throws Exception {
+            @RequestBody CreateOrderRequest.OrderLineRequest request) throws JsonProcessingException {
 
         String userId = currentUserId();
         String path = "/orders/" + id + "/lines";
@@ -87,7 +88,7 @@ public class OrderController {
     public OrderResponse saveChanges(
             @PathVariable Long id,
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
-            @RequestBody SaveOrderChangesRequest request) throws Exception {
+            @RequestBody SaveOrderChangesRequest request) throws JsonProcessingException {
         String userId = currentUserId();
         String path = "/orders/" + id + "/changes";
         String rawBody = objectMapper.writeValueAsString(request);
