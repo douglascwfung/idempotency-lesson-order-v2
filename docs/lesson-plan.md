@@ -426,17 +426,22 @@ mvn -Dtest=OrderOptimisticLockTest,OrderServiceTransactionTest test
 
 ## Lesson 9: Handle the Race on the Primary Key
 
+**Scope note.** This lesson's teaching outcome — catch the primary-key race and land on an `IN_PROGRESS` 409 — applies only to the **claim-and-replay** approach of Lessons 5–10. After Lessons 11–12 switch to single-transaction / `COMPLETED`-only (`runOrReplay`), there is no `IN_PROGRESS` status and therefore no in-progress race outcome. A concurrent insert race still exists in a different form: the loser reloads a `COMPLETED` key and either replays the stored response or rejects a hash mismatch. Lesson 11 updates the race test accordingly.
+
 The `key_value` column is already the primary key, so a second insert of the same key fails. Two concurrent requests that both see no existing row will both attempt the insert. The second insert throws `DataIntegrityViolationException`. The service catches the exception, reloads the key, and either replays the stored result or returns 409 if the first request is still in progress.
 
 ### Learning Objectives
 
 - Recognise that the primary key already enforces uniqueness.
 - Catch `DataIntegrityViolationException` on the claim insert.
-- Reload the key after the conflict and apply the same replay or in-progress rules.
+- Reload the key after the conflict and apply the same replay or in-progress rules (claim-and-replay only).
+- Know that Lessons 11–12 keep the catch/reload race but drop the `IN_PROGRESS` outcome.
 
 ### Key Concepts
 
-The first request inserts the key with status `IN_PROGRESS`. A concurrent request that also finds no row attempts the same insert. The database rejects the second insert because of the primary key. The service catches the violation, loads the row that the first request inserted, and continues with the normal rules: hash mismatch throws `IdempotencyKeyReuseException`, `IN_PROGRESS` throws `IdempotencyInProgressException`, and `COMPLETED` returns the stored response. The front end is expected to send one request at a time; the server check is a backstop.
+The first request inserts the key with status `IN_PROGRESS`. A concurrent request that also finds no row attempts the same insert. The database rejects the second insert because of the primary key. The service catches the violation, loads the row that the first request inserted, and continues with the normal claim-and-replay rules: hash mismatch throws `IdempotencyKeyReuseException`, `IN_PROGRESS` throws `IdempotencyInProgressException`, and `COMPLETED` returns the stored response. The front end is expected to send one request at a time; the server check is a backstop.
+
+**After Lessons 11–12.** The same primary-key race still happens under `runOrReplay`, but the raced row is already `COMPLETED` (or not yet visible until the winner commits). There is no `IN_PROGRESS` outcome to return: the loser reloads and either replays the completed response or throws `IdempotencyKeyReuseException` on a hash mismatch. Lesson 9's in-progress 409 path is therefore claim-and-replay-specific.
 
 ### What the Client Sees Without This Change
 
@@ -450,7 +455,7 @@ Without the try/catch, the second request receives an HTTP 500. The `DataIntegri
 
 ### Deliberate Design Decisions
 
-No additional unique constraint is added. The primary key is sufficient. The race is handled by catching the constraint violation rather than by a lock.
+No additional unique constraint is added. The primary key is sufficient. The race is handled by catching the constraint violation rather than by a lock. The `IN_PROGRESS` outcome of that race is claim-and-replay-specific; Lessons 11–12 keep the same catch/reload pattern but only replay `COMPLETED` or reject reuse.
 
 ### Implementation Outline
 
@@ -468,7 +473,7 @@ mvn -Dtest=IdempotencyServiceRaceTest test
 
 The method `concurrentClaimOfInProgressKeyThrows` must pass.
 
-On `main` after Lesson 11, the race test asserts completed-replay / hash-mismatch instead (`concurrentClaimOfSameKeyReplaysCompletedResponse`, `concurrentClaimWithDifferentHashThrowsReuse`).
+On `main` after Lessons 11–12 (single-TX / `COMPLETED`-only), there is no `IN_PROGRESS` race outcome. The race test asserts completed-replay / hash-mismatch instead (`concurrentClaimOfSameKeyReplaysCompletedResponse`, `concurrentClaimWithDifferentHashThrowsReuse`).
 
 The earlier tests continue to pass:
 
