@@ -1,7 +1,6 @@
 package lab.lesson.order.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lab.lesson.idem.IdempotencyKey;
 import lab.lesson.idem.IdempotencyKeyReuseException;
 import lab.lesson.idem.IdempotencyService;
 import lab.lesson.order.service.OrderService;
@@ -18,12 +17,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,7 +53,7 @@ class OrderControllerIdempotencyTest {
     }
 
     @Test
-    void createWithNewKeyClaimsAndCompletes() throws Exception {
+    void createWithNewKeyRunOrReplayCompletes() throws Exception {
         CreateOrderRequest request = new CreateOrderRequest("Alice", List.of(
                 new CreateOrderRequest.OrderLineRequest("SKU-1", 1, new BigDecimal("10.00"))
         ));
@@ -62,32 +61,30 @@ class OrderControllerIdempotencyTest {
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"customerName\":\"Alice\"}");
         setUser("user-1");
-        when(idempotencyService.claimOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any())).thenReturn(Optional.empty());
-        when(orderService.create(request)).thenReturn(response);
-        when(objectMapper.writeValueAsString(response)).thenReturn("{\"id\":1}");
+        when(idempotencyService.runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
+                .thenReturn(response);
 
         OrderResponse result = orderController.create("key-1", request);
 
         assertThat(result).isEqualTo(response);
-        verify(idempotencyService).complete(eq("key-1"), eq(201), any());
+        verify(idempotencyService).runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request));
+        verify(orderService, never()).create(request);
     }
 
     @Test
     void createWithCompletedKeyReplaysStoredResponse() throws Exception {
         CreateOrderRequest request = new CreateOrderRequest("Alice", List.of());
         OrderResponse stored = new OrderResponse(5L, "Alice", List.of());
-        IdempotencyKey key = new IdempotencyKey();
-        key.setResponseBody("{\"id\":5}");
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{}");
         setUser("user-1");
-        when(idempotencyService.claimOrReplay(eq("key-2"), eq("user-1"), eq("/orders"), any())).thenReturn(Optional.of(key));
-        when(objectMapper.readValue(eq("{\"id\":5}"), eq(OrderResponse.class))).thenReturn(stored);
+        when(idempotencyService.runOrReplay(eq("key-2"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
+                .thenReturn(stored);
 
         OrderResponse result = orderController.create("key-2", request);
 
         assertThat(result).isEqualTo(stored);
-        verify(orderService, org.mockito.Mockito.never()).create(any());
+        verify(orderService, never()).create(any());
     }
 
     @Test
@@ -96,24 +93,10 @@ class OrderControllerIdempotencyTest {
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"customerName\":\"Bob\"}");
         setUser("user-1");
-        when(idempotencyService.claimOrReplay(eq("key-3"), eq("user-1"), eq("/orders"), any()))
+        when(idempotencyService.runOrReplay(eq("key-3"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
                 .thenThrow(new IdempotencyKeyReuseException("key-3"));
 
         assertThatThrownBy(() -> orderController.create("key-3", request))
                 .isInstanceOf(IdempotencyKeyReuseException.class);
-    }
-
-    @Test
-    void createWithInProgressKeyThrowsWithKey() throws Exception {
-        CreateOrderRequest request = new CreateOrderRequest("Alice", List.of());
-
-        when(objectMapper.writeValueAsString(request)).thenReturn("{}");
-        setUser("user-1");
-        when(idempotencyService.claimOrReplay(eq("key-4"), eq("user-1"), eq("/orders"), any()))
-                .thenThrow(new lab.lesson.idem.IdempotencyInProgressException("key-4"));
-
-        assertThatThrownBy(() -> orderController.create("key-4", request))
-                .isInstanceOf(lab.lesson.idem.IdempotencyInProgressException.class)
-                .hasFieldOrPropertyWithValue("key", "key-4");
     }
 }

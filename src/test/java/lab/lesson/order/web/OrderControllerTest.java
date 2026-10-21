@@ -44,7 +44,7 @@ class OrderControllerTest {
         OrderResponse response = new OrderResponse(1L, "Alice", List.of(
                 new OrderResponse.OrderLineResponse(10L, "SKU-1", 2, new BigDecimal("10.00"), 0)
         ));
-        when(orderService.create(any(CreateOrderRequest.class))).thenReturn(response);
+        when(orderService.create(request)).thenReturn(response);
 
         OrderResponse result = orderController.create(null, request);
 

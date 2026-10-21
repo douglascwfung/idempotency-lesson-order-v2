@@ -21,8 +21,14 @@ public class IdempotencyKey {
     @Column(name = "request_hash", nullable = false, length = 64)
     private String requestHash;
 
+    /**
+     * After Lesson 11 this is always {@link IdempotencyKeyStatus#COMPLETED}.
+     * Earlier teaching tags used {@code IN_PROGRESS} then {@code COMPLETED};
+     * those paths are historical and not present from this tip onward.
+     */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status;
+    private IdempotencyKeyStatus status;
 
     @Column(name = "response_status")
     private Integer responseStatus;

@@ -67,11 +67,14 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 8 | Authenticated principal as user id |
 | 9 | Primary-key race on concurrent claim |
 | 10 | Required idempotency key on add-line |
+| 11 | Single transaction: key + Order as `COMPLETED` (direct `OrderService` call, no lambda) |
 
-Tag `lesson-10` is the tip of this lesson.
+Tag `lesson-11` is the tip of this lesson.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
+Design notes:
+- [`docs/claim-vs-single-transaction.md`](docs/claim-vs-single-transaction.md) — claim-then-complete vs single-transaction (Lesson 11)
 
 ## Tags
 
@@ -88,8 +91,9 @@ Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 | `lesson-8` | End state after Lesson 8 |
 | `lesson-9` | End state after Lesson 9 |
 | `lesson-10` | End state after Lesson 10 |
+| `lesson-11` | End state after Lesson 11 |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-10        # end of Lesson 10
+git checkout lesson-11        # end of Lesson 11
 ```

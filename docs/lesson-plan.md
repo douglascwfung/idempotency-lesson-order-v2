@@ -535,3 +535,77 @@ The earlier tests continue to pass:
 mvn -Dtest=OrderControllerIdempotencyTest,OrderLineServiceTest test
 ```
 
+## Lesson 11: Put the Key and the Order in One Transaction
+
+Lessons 5–10 use claim-then-complete: the key is claimed as `IN_PROGRESS` in its own transaction, the Order is written, then the key is updated to `COMPLETED`. That separates the claim commit from the Order commit and opens a crash window (stuck `IN_PROGRESS`, no Order, recovery needed). For work that shares one database, the key and Order write can share one transaction: the key is inserted already as `COMPLETED` with the Order write, and there is no `IN_PROGRESS` status. See `docs/claim-vs-single-transaction.md`.
+
+### Learning Objectives
+
+- Place the key insert and the Order write in a single transaction boundary.
+- Insert the key already as `COMPLETED` — there is no `IN_PROGRESS` status.
+- Call `OrderService` **directly** inside transactional `runOrReplay` overloads (create and add-line). There is no work lambda / `ThrowingSupplier` yet.
+- Confirm that a failure rolls both the key and the Order back so a retry can start fresh.
+- Keep the existing hash (`userId + path + rawBody`), the add-line key behaviour, and primary-key race handling.
+- Remove the in-progress 409 path (`IdempotencyInProgressException`) — there is no `IN_PROGRESS` status to observe.
+
+### Key Concepts
+
+`IdempotencyService.runOrReplay` starts one transaction. When no key exists, the service inserts a row with status `COMPLETED` and flushes so the primary key rejects a concurrent insert of the same key. It then calls `orderService.create(request)` or `orderService.addLine(orderId, request)` **as a direct statement inside the key method**, stores the response body on that same row, and returns. Controllers pass the request DTO into `runOrReplay`; they do not pass a lambda. The transaction commits with the key already `COMPLETED` and the Order present. There is never an `IN_PROGRESS` status — not committed and not used as a transient value. If the process crashes before commit, both the key insert and the Order write roll back. A retry finds no row and starts fresh. Concurrent claims of the same key still hit the primary key; the service catches `DataIntegrityViolationException`, reloads the key, and either replays the completed response or throws `IdempotencyKeyReuseException` on a hash mismatch. The hash remains `userId + path + rawBody`. `IdempotencyInProgressException` is removed because there is no in-progress state to observe.
+
+On this tip, `IdempotencyKeyStatus` is a COMPLETED-only enum used by `IdempotencyService` and the entity, and Flyway `V5__idempotency_status_completed_only.sql` adds a CHECK that `status = 'COMPLETED'`. Lesson 12 will keep this COMPLETED-only rule and introduce a work-lambda shape so the key method no longer imports Order types.
+
+### What You Will Build
+
+- `IdempotencyService` create and add-line `runOrReplay` overloads that insert the key as `COMPLETED`, call `OrderService` directly, and store the response inside one `@Transactional` method.
+- Updated `OrderController.create` and `OrderController.addLine` that call those overloads instead of separate `claimOrReplay` and `complete` calls.
+- Removal of `IdempotencyInProgressException` and its exception-handler mapping.
+- A Spring Boot test (`IdempotencySingleTransactionTest`) that verifies a successful create leaves a `COMPLETED` key with the Order, that a failure rolls both back, and that a replay does not create a second Order.
+- An updated race test that asserts a concurrent insert replays the completed response or rejects a hash mismatch.
+- A short note `docs/claim-vs-single-transaction.md` that compares claim-then-complete with the single-transaction design.
+
+### Deliberate Design Decisions
+
+The key is inserted as `COMPLETED` before the Order write runs, still inside the same transaction. The early `saveAndFlush` lets the primary key reject a concurrent claim before a second Order is created. Because the insert and the Order share one commit, a crash never leaves a key row behind. Recovery code that deletes or leases stuck `IN_PROGRESS` rows is not required. Without `IN_PROGRESS` there is no running key to return and no in-progress 409. Hash reuse with different content still returns 409 through `IdempotencyKeyReuseException`.
+
+Wiring `OrderService` inside the key method keeps the Lesson 11 story focused on the transaction boundary and COMPLETED-only insert. The cost is that `IdempotencyService` knows about Order create and add-line. Lesson 12 removes that coupling by accepting domain work as a lambda.
+
+### Implementation Outline
+
+1. Replace `claimOrReplay` and `complete` with create and add-line `runOrReplay` overloads on `IdempotencyService`. Inject `OrderService` and `ObjectMapper`. On a miss, insert the key as `COMPLETED`, call `orderService.create` / `orderService.addLine` directly, then store the response body on the same row.
+2. On `DataIntegrityViolationException`, reload the key and replay or reject hash mismatch. Do not throw an in-progress exception.
+3. Change `OrderController.create` and `OrderController.addLine` to call the matching `runOrReplay` overload (pass the request DTO; no lambda).
+4. Delete `IdempotencyInProgressException` and remove its handler method.
+5. Add `IdempotencySingleTransactionTest` and update `IdempotencyServiceRaceTest`.
+6. Enforce COMPLETED-only via `IdempotencyKeyStatus` and Flyway `V5`.
+7. Add `docs/claim-vs-single-transaction.md`.
+
+### Verify Your Work
+
+Run the single-transaction integration test:
+
+```
+mvn -Dtest=IdempotencySingleTransactionTest test
+```
+
+The following methods must pass:
+
+- `createWithKeyCommitsOrderAndCompletedKeyTogether`
+- `failedWorkRollsBackKeyAndOrder`
+- `completedKeyReplaysWithoutSecondOrder`
+
+Run the race test:
+
+```
+mvn -Dtest=IdempotencyServiceRaceTest test
+```
+
+The following methods must pass:
+
+- `concurrentClaimOfSameKeyReplaysCompletedResponse`
+- `concurrentClaimWithDifferentHashThrowsReuse`
+
+The controller idempotency tests continue to pass:
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerAddLineIdempotencyTest test
+```
