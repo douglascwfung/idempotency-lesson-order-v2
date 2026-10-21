@@ -68,13 +68,16 @@ Send the same create request twice. Lesson 1 deliberately creates two separate O
 | 9 | Primary-key race on concurrent claim |
 | 10 | Required idempotency key on add-line |
 | 11 | Single transaction: key + Order as `COMPLETED` (direct `OrderService` call, no lambda) |
+| 12 | Lambda work callback into `runOrReplay` |
 
-Tag `lesson-11` is the tip of this lesson.
+`main` holds the **final** design: COMPLETED-only status (`IdempotencyKeyStatus` + Flyway `V5`), `runOrReplay` with a work lambda, and required `Idempotency-Key` on add-line.
 
 Full narrative: [`docs/lesson-plan.md`](docs/lesson-plan.md).
 
 Design notes:
+
 - [`docs/claim-vs-single-transaction.md`](docs/claim-vs-single-transaction.md) — claim-then-complete vs single-transaction (Lesson 11)
+- [`docs/why-lambda-for-idempotency.md`](docs/why-lambda-for-idempotency.md) — why domain work is a lambda (Lesson 12)
 
 ## Tags
 
@@ -90,10 +93,14 @@ Design notes:
 | `lesson-7` | End state after Lesson 7 |
 | `lesson-8` | End state after Lesson 8 |
 | `lesson-9` | End state after Lesson 9 |
-| `lesson-10` | End state after Lesson 10 |
-| `lesson-11` | End state after Lesson 11 |
+| `lesson-10` | End state after Lesson 10 (code tip) |
+| `lesson-11` | End state after Lesson 11 (single-TX, no lambda) |
+| `lesson-12` | End state after Lesson 12 (lambda) |
+| `lesson-plan-v2` | Full HEAD code + continuous Lessons 1..12 plan on `main` |
 
 ```bash
 git checkout lesson-0          # empty start
-git checkout lesson-11        # end of Lesson 11
+git checkout lesson-11         # single-TX without lambda
+git checkout lesson-plan-v2    # full final tree + docs
+git checkout lesson-12         # same tip (final lesson)
 ```

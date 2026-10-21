@@ -18,7 +18,7 @@ The service inserts the key as `IN_PROGRESS` and commits. It then creates the Or
 
 ## Single transaction
 
-The service inserts the key already as `COMPLETED`, writes the Order, and stores the response body inside one transaction. There is no `IN_PROGRESS` status at any point. Controllers call `runOrReplay`, which invokes `OrderService` directly inside that transaction (Lesson 11). Lesson 12 later replaces the direct Order call with a work lambda. On this tip, `IdempotencyKeyStatus.COMPLETED` and Flyway `V5` (`CHECK (status = 'COMPLETED')`) enforce that rule at the type and schema layers.
+The service inserts the key already as `COMPLETED`, writes the Order, and stores the response body inside one transaction. There is no `IN_PROGRESS` status at any point. Controllers call `runOrReplay`. Lesson 11 invoked `OrderService` directly inside that method; Lesson 12 (this tip) passes Order work as a lambda. `IdempotencyKeyStatus.COMPLETED` and Flyway `V5` (`CHECK (status = 'COMPLETED')`) enforce that rule at the type and schema layers.
 
 **Crash after key insert.** There is no committed key insert to crash after in isolation. An uncommitted key and an uncommitted Order roll back together. A retry finds no row and starts fresh.
 

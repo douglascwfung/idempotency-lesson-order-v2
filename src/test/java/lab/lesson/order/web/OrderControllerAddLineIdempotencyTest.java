@@ -20,7 +20,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,14 +57,18 @@ class OrderControllerAddLineIdempotencyTest {
 
         setUser();
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"sku\":\"SKU-1\"}");
-        when(idempotencyService.runOrReplay(eq("key-1"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), eq(1L), eq(request)))
-                .thenReturn(response);
+        when(idempotencyService.runOrReplay(eq("key-1"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    IdempotencyService.ThrowingSupplier<OrderResponse.OrderLineResponse> work = invocation.getArgument(5);
+                    return work.get();
+                });
+        when(orderService.addLine(1L, request)).thenReturn(response);
 
         OrderResponse.OrderLineResponse result = orderController.addLine(1L, "key-1", request);
 
         assertThat(result).isEqualTo(response);
-        verify(idempotencyService).runOrReplay(eq("key-1"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), eq(1L), eq(request));
-        verify(orderService, never()).addLine(any(), any());
+        verify(idempotencyService).runOrReplay(eq("key-1"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), any(), any(), any());
+        verify(orderService).addLine(1L, request);
     }
 
     @Test
@@ -77,12 +80,12 @@ class OrderControllerAddLineIdempotencyTest {
 
         setUser();
         when(objectMapper.writeValueAsString(request)).thenReturn("{}");
-        when(idempotencyService.runOrReplay(eq("key-2"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), eq(1L), eq(request)))
+        when(idempotencyService.runOrReplay(eq("key-2"), eq("user-1"), eq("/orders/1/lines"), any(), eq(201), any(), any(), any()))
                 .thenReturn(stored);
 
         OrderResponse.OrderLineResponse result = orderController.addLine(1L, "key-2", request);
 
         assertThat(result).isEqualTo(stored);
-        verify(orderService, never()).addLine(any(), any());
+        verify(orderService, org.mockito.Mockito.never()).addLine(any(), any());
     }
 }

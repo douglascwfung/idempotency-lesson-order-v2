@@ -609,3 +609,70 @@ The controller idempotency tests continue to pass:
 ```
 mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerAddLineIdempotencyTest test
 ```
+
+## Lesson 12: Pass Order Work as a Lambda into the Key Method
+
+Lesson 11 put the key insert and the Order write in one transaction, with the key inserted already as `COMPLETED`, by calling `OrderService` directly inside `runOrReplay` overloads. That lesson focused on the transaction boundary and the removal of `IN_PROGRESS`. Lesson 12 makes the call shape deliberate: the Order work is passed into the key method as a lambda (work callback). The key method owns the transaction and the key lifecycle. Callers supply only the domain work. The lambda runs inside the open transaction that the key method owns.
+
+### Learning Objectives
+
+- Pass create and add-line work into `runOrReplay` as a lambda instead of wiring Order logic inside the key method.
+- Keep the Lesson 11 rules: one transaction, `COMPLETED`-only insert, primary-key race → replay or hash-mismatch 409, hash `userId + path + rawBody`.
+- See that a failure under the lambda rolls the key and the Order back together.
+- Understand why the lambda helps later: mixed add+update requests, different exception policies, and new endpoints without copying `runOrReplay` wiring.
+
+### Key Concepts
+
+`IdempotencyService.runOrReplay` remains the key method. It is marked `@Transactional`, so it opens the box. On a miss it inserts the key as `COMPLETED`, flushes for the primary-key race, invokes the work callback, stores the response body, and returns. The work callback is a functional interface (`ThrowingSupplier`). Controllers pass `() -> orderService.create(request)` or `() -> orderService.addLine(id, request)`. The key method does not import Order types or know which endpoint is running. When the lambda runs, it is already inside the key method's transaction. Nested `@Transactional` on `OrderService` methods uses default `REQUIRED` propagation and joins that same box. A runtime failure that leaves `runOrReplay` rolls the flushed key and any Order rows written by the lambda back together. Replay and hash-mismatch behaviour are unchanged: an existing or raced `COMPLETED` key either returns the stored body or throws `IdempotencyKeyReuseException`.
+
+### What You Will Build
+
+- A documented work-callback shape on `IdempotencyService.runOrReplay` so domain work is supplied as a lambda.
+- `OrderController.create` and `OrderController.addLine` that pass only their domain call as the lambda (no Order wiring inside the key method).
+- Tests that prove success commits key + Order together, failure under the lambda rolls both back, replay does not create a second Order, and a concurrent primary-key race still replays or rejects hash mismatch.
+- A short note `docs/why-lambda-for-idempotency.md` that explains the separation of key lifecycle from domain work.
+
+### Deliberate Design Decisions
+
+Lesson 11 already achieved one transaction without teaching the lambda — it called `OrderService` directly inside the key method. Lesson 12 does not change the `COMPLETED`-only insert or the race handling. It makes the callback the extension point: mixed add+update work in one request, different exception policies inside the work, and new idempotent endpoints can each pass a different lambda without copying claim/replay/hash code. The tradeoff is that the call site is slightly harder to read at first — the Order write is no longer a direct line in the key method. That cost is accepted so the key method stays generic. The COMPLETED-only enum and `V5` CHECK document and enforce the Lesson 11 status rule without changing the lambda shape.
+
+### Implementation Outline
+
+1. Keep `runOrReplay` as the single `@Transactional` key method. Accept the domain work as `ThrowingSupplier` (the lambda). Remove Order-specific overloads and the `OrderService` dependency from `IdempotencyService`.
+2. Ensure create and add-line controllers pass their Order service calls as lambdas, plus serializer and deserializer.
+3. Do not put create-specific or add-line-specific Order wiring inside `IdempotencyService`.
+4. Keep `COMPLETED` insert, `saveAndFlush`, `DataIntegrityViolationException` → reload → replay or hash mismatch.
+5. Confirm `IdempotencySingleTransactionTest` and `IdempotencyServiceRaceTest` cover commit, rollback under the lambda, replay, and race.
+6. Add `docs/why-lambda-for-idempotency.md`.
+
+### Verify Your Work
+
+Run the single-transaction integration test (lambda commit, rollback, and replay):
+
+```
+mvn -Dtest=IdempotencySingleTransactionTest test
+```
+
+The following methods must pass:
+
+- `createWithKeyCommitsOrderAndCompletedKeyTogether`
+- `failedWorkRollsBackKeyAndOrder`
+- `failureUnderTheLambdaAfterOrderWriteRollsBackKeyAndOrder`
+- `completedKeyReplaysWithoutSecondOrder`
+
+Run the race test:
+
+```
+mvn -Dtest=IdempotencyServiceRaceTest test
+```
+
+The following methods must pass:
+
+- `concurrentClaimOfSameKeyReplaysCompletedResponse`
+- `concurrentClaimWithDifferentHashThrowsReuse`
+
+The controller idempotency tests continue to pass:
+
+```
+mvn -Dtest=OrderControllerIdempotencyTest,OrderControllerAddLineIdempotencyTest test
+```

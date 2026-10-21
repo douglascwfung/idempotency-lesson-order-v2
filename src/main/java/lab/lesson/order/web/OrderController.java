@@ -38,14 +38,16 @@ public class OrderController {
 
         String userId = currentUserId();
         String rawBody = objectMapper.writeValueAsString(request);
-        // OrderService.create runs inside runOrReplay's transaction (no lambda).
+        // Domain work runs inside runOrReplay's transaction as a lambda.
         return idempotencyService.runOrReplay(
                 idempotencyKey,
                 userId,
                 "/orders",
                 rawBody,
                 201,
-                request);
+                () -> orderService.create(request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class));
     }
 
     @GetMapping("/{id}")
@@ -75,8 +77,9 @@ public class OrderController {
                 path,
                 rawBody,
                 201,
-                id,
-                request);
+                () -> orderService.addLine(id, request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.OrderLineResponse.class));
     }
 
     @PutMapping("/{id}/lines/{lineId}")

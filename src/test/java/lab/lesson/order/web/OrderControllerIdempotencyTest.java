@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,14 +60,18 @@ class OrderControllerIdempotencyTest {
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"customerName\":\"Alice\"}");
         setUser("user-1");
-        when(idempotencyService.runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
-                .thenReturn(response);
+        when(idempotencyService.runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    IdempotencyService.ThrowingSupplier<OrderResponse> work = invocation.getArgument(5);
+                    return work.get();
+                });
+        when(orderService.create(request)).thenReturn(response);
 
         OrderResponse result = orderController.create("key-1", request);
 
         assertThat(result).isEqualTo(response);
-        verify(idempotencyService).runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request));
-        verify(orderService, never()).create(request);
+        verify(idempotencyService).runOrReplay(eq("key-1"), eq("user-1"), eq("/orders"), any(), eq(201), any(), any(), any());
+        verify(orderService).create(request);
     }
 
     @Test
@@ -78,13 +81,13 @@ class OrderControllerIdempotencyTest {
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{}");
         setUser("user-1");
-        when(idempotencyService.runOrReplay(eq("key-2"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
+        when(idempotencyService.runOrReplay(eq("key-2"), eq("user-1"), eq("/orders"), any(), eq(201), any(), any(), any()))
                 .thenReturn(stored);
 
         OrderResponse result = orderController.create("key-2", request);
 
         assertThat(result).isEqualTo(stored);
-        verify(orderService, never()).create(any());
+        verify(orderService, org.mockito.Mockito.never()).create(any());
     }
 
     @Test
@@ -93,7 +96,7 @@ class OrderControllerIdempotencyTest {
 
         when(objectMapper.writeValueAsString(request)).thenReturn("{\"customerName\":\"Bob\"}");
         setUser("user-1");
-        when(idempotencyService.runOrReplay(eq("key-3"), eq("user-1"), eq("/orders"), any(), eq(201), eq(request)))
+        when(idempotencyService.runOrReplay(eq("key-3"), eq("user-1"), eq("/orders"), any(), eq(201), any(), any(), any()))
                 .thenThrow(new IdempotencyKeyReuseException("key-3"));
 
         assertThatThrownBy(() -> orderController.create("key-3", request))

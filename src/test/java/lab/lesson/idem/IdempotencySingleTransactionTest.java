@@ -1,8 +1,8 @@
 package lab.lesson.idem;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lab.lesson.order.exception.OrderNotFoundException;
 import lab.lesson.order.repository.OrderRepository;
+import lab.lesson.order.service.OrderService;
 import lab.lesson.order.web.dto.CreateOrderRequest;
 import lab.lesson.order.web.dto.OrderResponse;
 import org.junit.jupiter.api.Test;
@@ -20,6 +20,9 @@ class IdempotencySingleTransactionTest {
 
     @Autowired
     private IdempotencyService idempotencyService;
+
+    @Autowired
+    private OrderService orderService;
 
     @Autowired
     private IdempotencyKeyRepository keyRepository;
@@ -44,7 +47,9 @@ class IdempotencySingleTransactionTest {
                 "/orders",
                 rawBody,
                 201,
-                request);
+                () -> orderService.create(request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class));
 
         IdempotencyKey key = keyRepository.findById("key-st-1").orElseThrow();
         assertThat(key.getStatus()).isEqualTo(IdempotencyKeyStatus.COMPLETED);
@@ -55,23 +60,56 @@ class IdempotencySingleTransactionTest {
 
     @Test
     void failedWorkRollsBackKeyAndOrder() throws Exception {
-        CreateOrderRequest.OrderLineRequest lineRequest =
-                new CreateOrderRequest.OrderLineRequest("SKU-2", 1, new BigDecimal("5.00"));
-        String rawBody = objectMapper.writeValueAsString(lineRequest);
+        CreateOrderRequest request = new CreateOrderRequest(
+                "Bob",
+                List.of(new CreateOrderRequest.OrderLineRequest("SKU-2", 1, new BigDecimal("5.00")))
+        );
+        String rawBody = objectMapper.writeValueAsString(request);
         long ordersBefore = orderRepository.count();
 
-        // Missing Order makes OrderService.addLine fail after the COMPLETED key insert.
         assertThatThrownBy(() -> idempotencyService.runOrReplay(
                 "key-st-fail",
                 "user-1",
-                "/orders/999999/lines",
+                "/orders",
                 rawBody,
                 201,
-                999999L,
-                lineRequest))
-                .isInstanceOf(OrderNotFoundException.class);
+                () -> {
+                    throw new RuntimeException("simulated crash before Order write completes");
+                },
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("simulated crash");
 
         assertThat(keyRepository.findById("key-st-fail")).isEmpty();
+        assertThat(orderRepository.count()).isEqualTo(ordersBefore);
+    }
+
+    @Test
+    void failureUnderTheLambdaAfterOrderWriteRollsBackKeyAndOrder() throws Exception {
+        CreateOrderRequest request = new CreateOrderRequest(
+                "Dana",
+                List.of(new CreateOrderRequest.OrderLineRequest("SKU-4", 1, new BigDecimal("3.00")))
+        );
+        String rawBody = objectMapper.writeValueAsString(request);
+        long ordersBefore = orderRepository.count();
+
+        assertThatThrownBy(() -> idempotencyService.runOrReplay(
+                "key-st-lambda-fail",
+                "user-1",
+                "/orders",
+                rawBody,
+                201,
+                () -> {
+                    orderService.create(request);
+                    throw new RuntimeException("fail after Order write inside lambda");
+                },
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("fail after Order write");
+
+        assertThat(keyRepository.findById("key-st-lambda-fail")).isEmpty();
         assertThat(orderRepository.count()).isEqualTo(ordersBefore);
     }
 
@@ -89,7 +127,9 @@ class IdempotencySingleTransactionTest {
                 "/orders",
                 rawBody,
                 201,
-                request);
+                () -> orderService.create(request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class));
 
         long ordersAfterFirst = orderRepository.count();
 
@@ -99,7 +139,9 @@ class IdempotencySingleTransactionTest {
                 "/orders",
                 rawBody,
                 201,
-                request);
+                () -> orderService.create(request),
+                objectMapper::writeValueAsString,
+                body -> objectMapper.readValue(body, OrderResponse.class));
 
         assertThat(second.id()).isEqualTo(first.id());
         assertThat(orderRepository.count()).isEqualTo(ordersAfterFirst);
